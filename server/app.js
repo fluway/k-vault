@@ -161,6 +161,24 @@ function createApp() {
     return output;
   }
 
+  function getBootstrapReadiness(config) {
+    const bootstrap = config?.bootstrapDefaultStorage || {};
+    const byType = {
+      telegram: Boolean(bootstrap.telegram?.botToken && bootstrap.telegram?.chatId),
+      r2: Boolean(bootstrap.r2?.endpoint && bootstrap.r2?.bucket && bootstrap.r2?.accessKeyId && bootstrap.r2?.secretAccessKey),
+      s3: Boolean(bootstrap.s3?.endpoint && bootstrap.s3?.bucket && bootstrap.s3?.accessKeyId && bootstrap.s3?.secretAccessKey),
+      discord: Boolean(bootstrap.discord?.webhookUrl || (bootstrap.discord?.botToken && bootstrap.discord?.channelId)),
+      huggingface: Boolean(bootstrap.huggingface?.token && bootstrap.huggingface?.repo),
+      webdav: Boolean(bootstrap.webdav?.baseUrl && (bootstrap.webdav?.bearerToken || (bootstrap.webdav?.username && bootstrap.webdav?.password))),
+      github: Boolean(bootstrap.github?.repo && bootstrap.github?.token),
+    };
+
+    return {
+      defaultType: String(bootstrap.type || 'telegram').toLowerCase(),
+      byType,
+    };
+  }
+
   const UI_CONFIG_FILE_NAME = 'ui_config.json';
   const UI_EFFECT_STYLES = new Set(['none', 'math', 'particle', 'texture']);
   const DEFAULT_UI_CONFIG = {
@@ -690,6 +708,22 @@ function createApp() {
       const payload = toStorageErrorPayload(error);
       return c.json({ success: true, result: { connected: false, errorModel: payload, detail: payload.detail } });
     }
+  });
+
+  app.post('/api/storage/bootstrap/sync', (c) => {
+    const unauthorized = requireAuth(c);
+    if (unauthorized) return unauthorized;
+
+    const { storageRepo } = getServices(c);
+    storageRepo.ensureBootstrapStorage();
+
+    const items = storageRepo.list(false);
+    return c.json({
+      success: true,
+      synced: true,
+      bootstrap: getBootstrapReadiness(container.config),
+      items,
+    });
   });
 
   app.post('/api/storage/default/:id', (c) => {
