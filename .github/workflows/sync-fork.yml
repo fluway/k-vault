@@ -5,7 +5,6 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
-# 仅保留「强制Node.js 24」的核心变量，删除冲突变量
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -17,7 +16,6 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      # 用v4大版本（自动拉取已发布的最新兼容版）
       - name: Checkout fork repo
         uses: actions/checkout@v4
         with:
@@ -25,56 +23,61 @@ jobs:
           token: ${{ secrets.SYNC_FORK_TOKEN }}
           ref: main
 
-      # 无需显式配置Node.js（同步逻辑是git命令，不依赖Node.js，仅Action本身依赖）
+      # 关键修复：配置git提交者身份（解决Committer identity unknown报错）
+      - name: Configure git identity
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
       - name: Validate PAT token
         run: |
           if [ -z "${{ secrets.SYNC_FORK_TOKEN }}" ]; then
-            echo "❌ 未配置SYNC_FORK_TOKEN！请在仓库Secrets中添加PAT令牌"
+            echo "❌ 未配置SYNC_FORK_TOKEN！"
             exit 1
           fi
 
       - name: Add and verify upstream repo
         run: |
           UPSTREAM_REPO="https://github.com/katelya77/K-Vault.git"
-          # 检查上游仓库连通性
           if ! git ls-remote "$UPSTREAM_REPO" > /dev/null 2>&1; then
             echo "❌ 上游仓库无法访问：$UPSTREAM_REPO"
             exit 1
           fi
-          # 添加上游仓库（已存在则更新地址）
           git remote add upstream "$UPSTREAM_REPO" || git remote set-url upstream "$UPSTREAM_REPO"
           git fetch upstream --prune
-          echo "✅ 成功连接上游仓库：$UPSTREAM_REPO"
+          echo "✅ 成功连接上游仓库"
 
       - name: Merge upstream changes to main
         id: merge
         run: |
           git checkout main
-          # 确保本地main分支是最新的
           git pull origin main --no-edit
-          # 合并上游代码（无冲突则推送）
+          # 先检查是否有需要合并的内容，避免空合并报错
+          if git diff --quiet upstream/main main; then
+            echo "✅ 本地分支已和上游同步，无需合并"
+            exit 0
+          fi
+          # 执行合并（带身份配置，不会再报身份错误）
           if git merge upstream/main --no-edit --no-ff; then
             git push origin main
-            echo "✅ 同步成功！已将上游最新代码合并到你的Fork仓库"
+            echo "✅ 成功合并上游代码并推送"
           else
-            echo "❌ 合并冲突！请手动解决后重试（冲突文件需本地编辑）"
+            echo "❌ 真正的合并冲突！请手动解决"
             exit 1
           fi
 
-      # 冲突时给出详细的手动解决步骤
       - name: Handle merge conflicts
         if: steps.merge.outcome == 'failure'
         run: |
           echo "============================================================="
           echo "📌 手动解决冲突步骤（替换「你的用户名」为实际GitHub用户名）："
-          echo "1. 克隆你的Fork仓库：git clone https://github.com/你的用户名/K-Vault.git"
-          echo "2. 进入仓库目录：cd K-Vault"
-          echo "3. 添加上游仓库：git remote add upstream https://github.com/katelya77/K-Vault.git"
-          echo "4. 拉取上游最新代码：git fetch upstream"
-          echo "5. 切换到main分支：git checkout main"
-          echo "6. 合并上游代码：git merge upstream/main"
-          echo "7. 编辑冲突文件（查找<<<<<<< HEAD标记，保留需要的代码）"
-          echo "8. 提交冲突修改：git add . && git commit -m 'resolve: 合并上游代码冲突'"
-          echo "9. 推送到你的Fork：git push origin main"
+          echo "1. 克隆仓库：git clone https://github.com/你的用户名/K-Vault.git"
+          echo "2. 进入仓库：cd K-Vault"
+          echo "3. 添加上游：git remote add upstream https://github.com/katelya77/K-Vault.git"
+          echo "4. 拉取上游：git fetch upstream"
+          echo "5. 切换分支：git checkout main"
+          echo "6. 合并代码：git merge upstream/main"
+          echo "7. 解决冲突后提交：git add . && git commit -m 'resolve conflict'"
+          echo "8. 推送：git push origin main"
           echo "============================================================="
           exit 1
