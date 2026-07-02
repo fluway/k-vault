@@ -34,27 +34,32 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.92);
+      background:
+        linear-gradient(180deg, rgba(5, 10, 18, 0.94), rgba(8, 13, 22, 0.98));
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       z-index: 9999;
-      padding: 20px;
+      padding: 24px;
     }
     .preview-modal img {
-      max-width: 90%;
-      max-height: 75vh;
+      max-width: min(92vw, 1280px);
+      max-height: 78vh;
       border-radius: 8px;
       object-fit: contain;
+      background: #070b12;
+      box-shadow: 0 28px 90px rgba(0, 0, 0, 0.46);
     }
     .preview-modal .iframe-container {
-      width: 90vw;
-      height: 75vh;
+      width: min(92vw, 1280px);
+      height: min(78vh, 820px);
       position: relative;
       border-radius: 8px;
       overflow: hidden;
-      background: #000;
+      background: #070b12;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 28px 90px rgba(0, 0, 0, 0.46);
     }
     .preview-modal .iframe-container iframe {
       width: 100%;
@@ -65,34 +70,44 @@
       position: absolute;
       top: 20px;
       right: 20px;
-      width: 48px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
       border: none;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.12);
       color: white;
-      font-size: 1.5em;
+      font-size: 1.2em;
       cursor: pointer;
-      transition: all 0.3s;
+      transition: background 0.2s ease, transform 0.2s ease;
       z-index: 10001;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
     .preview-close:hover {
       background: rgba(255, 255, 255, 0.35);
-      transform: rotate(90deg);
+      transform: translateY(-1px);
     }
     .preview-toolbar {
       margin-top: 16px;
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 10px 20px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
+      justify-content: space-between;
+      gap: 14px;
+      width: min(92vw, 1280px);
+      padding: 10px 12px 10px 16px;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
     }
     .preview-filename {
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 0.9em;
-      max-width: 300px;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 13px;
+      font-weight: 650;
+      min-width: 0;
+      max-width: 62vw;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -100,6 +115,38 @@
     .preview-btns {
       display: flex;
       gap: 8px;
+    }
+    @media (max-width: 720px) {
+      .preview-modal {
+        padding: 12px;
+      }
+      .preview-close {
+        top: 12px;
+        right: 12px;
+        width: 40px;
+        height: 40px;
+      }
+      .preview-modal img,
+      .preview-modal .iframe-container,
+      .preview-toolbar {
+        width: 100%;
+      }
+      .preview-modal .iframe-container {
+        height: 74vh;
+      }
+      .preview-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .preview-filename {
+        max-width: 100%;
+      }
+      .preview-btns {
+        justify-content: stretch;
+      }
+      .preview-btns .el-button {
+        flex: 1;
+      }
     }
     .disk-layout {
       display: grid;
@@ -1008,7 +1055,30 @@
                 <i :class="item.metadata.liked ? 'fa-solid fa-bookmark liked' : 'fa-regular fa-bookmark not-liked'"></i>
                 </span>
                 <el-checkbox v-model="item.selected" :ref="'checkbox-' + index"></el-checkbox>
-                <el-image :src="'/file/' + item.name" :preview-src-list="['/file/' + item.name]" fit="cover" lazy="true"></el-image>
+                <div
+                  class="preview-stage image-preview-stage"
+                  :class="{ 'is-gated': isPreviewGated(item, 'image') }"
+                  @click.stop="revealPreview(item)">
+                  <el-image
+                    v-if="!isPreviewGated(item, 'image')"
+                    :src="'/file/' + item.name"
+                    :preview-src-list="['/file/' + item.name]"
+                    fit="cover"
+                    lazy>
+                  </el-image>
+                  <div v-else class="preview-skeleton image-skeleton">
+                    <i :class="getFileIcon(item.name)"></i>
+                  </div>
+                  <button
+                    v-if="isPreviewGated(item, 'image')"
+                    class="preview-gate"
+                    type="button"
+                    @click.stop="revealPreview(item)">
+                    <span class="preview-gate-icon"><i class="fas fa-eye"></i></span>
+                    <span class="preview-gate-title">{{ getPreviewGateTitle(item, 'image') }}</span>
+                    <span class="preview-gate-subtitle">{{ getPreviewGateSubtitle(item, 'image') }}</span>
+                  </button>
+                </div>
                 <div class="image-overlay">
                   <div class="overlay-buttons">
                     <el-dropdown @command="(cmd) => handleQuickCopy(cmd, item.name)" trigger="click" size="mini">
@@ -1045,7 +1115,31 @@
             <template v-else-if="getActualFileType(item.name) === 'video'">
               <el-card class="video-card" :class="{ 'selected': item.selected }" :draggable="true" @dragstart="handleFileDragStart(item, $event)" @dragend="handleFileDragEnd">
                 <div class="video-content">
-                  <video :src="'/file/' + item.name" controls style="width: 100%; height: 100%; object-fit: cover;"></video>
+                  <div
+                    class="preview-stage video-preview-stage"
+                    :class="{ 'is-gated': isPreviewGated(item, 'video') }"
+                    @click.stop="revealPreview(item)">
+                    <video
+                      v-if="!isPreviewGated(item, 'video')"
+                      :src="'/file/' + item.name"
+                      controls
+                      playsinline
+                      preload="metadata"
+                      style="width: 100%; height: 100%; object-fit: cover;">
+                    </video>
+                    <div v-else class="preview-skeleton video-skeleton">
+                      <i class="fas fa-film"></i>
+                    </div>
+                    <button
+                      v-if="isPreviewGated(item, 'video')"
+                      class="preview-gate"
+                      type="button"
+                      @click.stop="revealPreview(item)">
+                      <span class="preview-gate-icon"><i class="fas fa-play"></i></span>
+                      <span class="preview-gate-title">{{ getPreviewGateTitle(item, 'video') }}</span>
+                      <span class="preview-gate-subtitle">{{ getPreviewGateSubtitle(item, 'video') }}</span>
+                    </button>
+                  </div>
                   <div class="video-title">
                     <el-popover
                       trigger="click"
@@ -1097,13 +1191,31 @@
                       <div class="audio-subtitle">{{ getFileType(item.name) }}</div>
                     </div>
                   </div>
-                  <audio
-                    class="custom-audio-player"
-                    :src="'/file/' + item.name"
-                    controls
-                    preload="metadata">
-                    当前浏览器不支持音频播放
-                  </audio>
+                  <div
+                    class="preview-stage audio-preview-stage"
+                    :class="{ 'is-gated': isPreviewGated(item, 'audio') }"
+                    @click.stop="revealPreview(item)">
+                    <audio
+                      v-if="!isPreviewGated(item, 'audio')"
+                      class="custom-audio-player"
+                      :src="'/file/' + item.name"
+                      controls
+                      preload="metadata">
+                      当前浏览器不支持音频播放
+                    </audio>
+                    <div v-else class="preview-skeleton audio-skeleton">
+                      <i class="fas fa-wave-square"></i>
+                    </div>
+                    <button
+                      v-if="isPreviewGated(item, 'audio')"
+                      class="preview-gate compact"
+                      type="button"
+                      @click.stop="revealPreview(item)">
+                      <span class="preview-gate-icon"><i class="fas fa-play"></i></span>
+                      <span class="preview-gate-title">{{ getPreviewGateTitle(item, 'audio') }}</span>
+                      <span class="preview-gate-subtitle">{{ getPreviewGateSubtitle(item, 'audio') }}</span>
+                    </button>
+                  </div>
                   <!-- 控制按钮区域 -->
                   <div class="audio-controls">
                     <button class="control-btn like-btn" @click.stop="toggleLike(index, item.name)"><i :class="item.metadata.liked ? 'fas fa-heart liked' : 'far fa-heart'"></i></button>
@@ -1458,25 +1570,25 @@
         },
         image: {
           name: '图片',
-          exts: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'ico', 'svg', 'heic', 'heif', 'avif'],
+          exts: ['jpg', 'jpeg', 'jfif', 'pjpeg', 'pjp', 'png', 'apng', 'gif', 'webp', 'bmp', 'tif', 'tiff', 'ico', 'svg', 'heic', 'heif', 'avif', 'jxl'],
           icon: 'fas fa-image',
           count: 0
         },
         video: {
           name: '视频',
-          exts: ['mp4', 'webm', 'ogg', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'm4v', '3gp', 'ts'],
+          exts: ['mp4', 'webm', 'ogg', 'ogv', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'm4v', 'm3u8', '3gp', 'ts', 'mts', 'm2ts'],
           icon: 'fas fa-video',
           count: 0
         },
         audio: {
           name: '音频',
-          exts: ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'ape', 'opus'],
+          exts: ['mp3', 'mpeg', 'wav', 'ogg', 'oga', 'flac', 'aac', 'm4a', 'wma', 'ape', 'opus', 'weba', 'midi', 'mid', 'aif', 'aiff'],
           icon: 'fas fa-music',
           count: 0
         },
         document: {
           name: '文件',
-          exts: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'zip', 'rar', '7z', 'tar', 'gz', 'exe', 'apk', 'dmg', 'iso', 'msi', 'deb', 'rpm', 'json', 'xml', 'csv', 'sql', 'html', 'css', 'js', 'py', 'java', 'go', 'rs', 'cpp', 'c', 'h'],
+          exts: ['pdf', 'ofd', 'typ', 'typst', 'doc', 'dot', 'docx', 'docm', 'dotx', 'dotm', 'rtf', 'odt', 'xls', 'xlsb', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm', 'ods', 'fods', 'numbers', 'ppt', 'pptx', 'pptm', 'ppsx', 'ppsm', 'potx', 'potm', 'odp', 'txt', 'md', 'markdown', 'zip', 'zipx', 'jar', 'war', 'ear', 'rar', '7z', 'tar', 'tgz', 'gz', 'gzip', 'bz2', 'bzip2', 'tbz', 'tbz2', 'xz', 'txz', 'lzma', 'zst', 'cab', 'iso', 'exe', 'apk', 'dmg', 'msi', 'deb', 'rpm', 'json', 'jsonc', 'json5', 'xml', 'csv', 'tsv', 'sql', 'html', 'css', 'js', 'ts', 'tsx', 'jsx', 'vue', 'py', 'java', 'go', 'rs', 'cpp', 'c', 'h', 'ttf', 'otf', 'woff', 'woff2', 'eml', 'msg', 'mbox', 'psd', 'ai', 'eps', 'sqlite', 'sqlite3', 'db', 'parquet', 'avro', 'wasm', 'webarchive', 'dwg', 'dxf', 'dwf', 'dwfx', 'xps', 'xmind', 'drawio', 'dio', 'excalidraw', 'mermaid', 'mmd', 'plantuml', 'puml', 'epub', 'umd', 'geojson', 'kml', 'gpx', 'shp', 'glb', 'gltf', 'obj', 'stl', 'ply', 'fbx', 'dae', '3ds', '3mf', 'usd', 'usdz', 'kmz', 'step', 'stp', 'iges', 'igs', 'ifc', 'olb', 'dra', 'gds', 'oas', 'oasis'],
           icon: 'fas fa-folder-open',
           count: 0
         }
@@ -1538,6 +1650,7 @@
         offsetY: 0
       },
       previewData: null,  // 模态框预览数据
+      revealedPreviewKeys: {},
       quickWebsites: [
         { name: '上传中心', url: './', icon: 'fas fa-cloud-upload-alt' },
         { name: '图片浏览', url: './gallery.html', icon: 'fas fa-images' },
@@ -2763,6 +2876,7 @@
       
       // 打开预览 - 使用模态框（与首页保持一致，不跳转新标签页）
       openPreview(item) {
+        this.revealPreview(item);
         const fileName = item.metadata?.fileName || item.name;
         const fileUrl = `${this.baseURL}/file/${item.name}`;
         const fileType = this.getActualFileType(item.name);
@@ -2782,8 +2896,10 @@
         const previewParams = new URLSearchParams({
           url: fileUrl,
           title: fileName,
-          autoplay: '1',
-          embed: '1'
+          autoplay: '0',
+          embed: '1',
+          size: String(item.metadata?.fileSize || 0),
+          type: fileType
         });
         const iframeSrc = `${this.baseURL}/preview.html?${previewParams.toString()}`;
 
@@ -3643,17 +3759,24 @@
         const ext = filename.split('.').pop().toLowerCase();
         const iconMap = {
           'pdf': 'fas fa-file-pdf',
-          'doc,docx': 'fas fa-file-word',
-          'xls,xlsx,csv': 'fas fa-file-excel',
-          'ppt,pptx': 'fas fa-file-powerpoint',
-          'txt,md,log': 'fas fa-file-lines',
-          'zip,rar,7z,tar,gz': 'fas fa-file-zipper',
-          'html,htm,css,js,ts,jsx,tsx,vue,php,py,java,c,cpp,h,hpp,cs,go,rs,rb,pl,sh,sql': 'fas fa-file-code',
-          'json,xml,yaml,yml,toml': 'fas fa-file-code',
-          'mp4,avi,mov,wmv,flv,mkv,webm': 'fas fa-file-video',
-          'mp3,wav,ogg,flac,aac,m4a,wma': 'fas fa-file-audio',
-          'jpg,jpeg,png,gif,bmp,webp,svg,ico': 'fas fa-file-image',
+          'ofd,typ,typst': 'fas fa-file-pdf',
+          'doc,dot,docx,docm,dotx,dotm,rtf,odt': 'fas fa-file-word',
+          'xls,xlsb,xlsx,xlsm,xlt,xltx,xltm,ods,fods,numbers,csv,tsv': 'fas fa-file-excel',
+          'ppt,pptx,pptm,ppsx,ppsm,potx,potm,odp': 'fas fa-file-powerpoint',
+          'txt,md,markdown,log,patch,diff,bundle,bdl': 'fas fa-file-lines',
+          'zip,zipx,jar,war,ear,rar,7z,tar,tgz,gz,gzip,bz2,bzip2,tbz,tbz2,xz,txz,lzma,zst,cab,iso': 'fas fa-file-zipper',
+          'html,htm,css,js,ts,jsx,tsx,vue,php,py,java,c,cpp,h,hpp,cs,go,rs,rb,pl,sh,sql,bash,cc': 'fas fa-file-code',
+          'json,jsonc,json5,xml,yaml,yml,toml,proto,hcl,graphql,gv': 'fas fa-file-code',
+          'eml,msg,mbox': 'fas fa-envelope',
+          'mp4,avi,mov,wmv,flv,mkv,webm,m4v,m3u8,3gp,ts,mts,m2ts': 'fas fa-file-video',
+          'mp3,mpeg,wav,ogg,oga,flac,aac,m4a,wma,ape,opus,weba,midi,mid,aif,aiff': 'fas fa-file-audio',
+          'jpg,jpeg,jfif,png,apng,gif,bmp,webp,svg,ico,tif,tiff,heic,heif,avif,jxl': 'fas fa-file-image',
           'psd,ai,eps,cdr': 'fas fa-file-image',
+          'ttf,otf,woff,woff2': 'fas fa-font',
+          'sqlite,sqlite3,db,parquet,avro,wasm,webarchive': 'fas fa-database',
+          'dwg,dxf,dwf,dwfx,xps': 'fas fa-drafting-compass',
+          'glb,gltf,obj,stl,ply,fbx,dae,3ds,3mf,usd,usdz,kmz,step,stp,iges,igs,ifc': 'fas fa-cube',
+          'xmind,drawio,dio,excalidraw,mermaid,mmd,plantuml,puml,epub,umd,geojson,kml,gpx,shp,olb,dra,gds,oas,oasis': 'fas fa-diagram-project',
           'exe,msi,app,dmg,deb,rpm': 'fas fa-file-arrow-down'
         };
         for(const [exts, icon] of Object.entries(iconMap)) {
@@ -4203,14 +4326,64 @@
           bindUpload('uiUploadLoginBtn', 'uiUploadLoginInput', 'uiLoginBgUrl');
         });
       },
-      shouldShowImage(item) {
+      getPreviewKey(item) {
+        return String(item?.name || item?.metadata?.fileName || '');
+      },
+      isPreviewRevealed(item) {
+        const key = this.getPreviewKey(item);
+        return Boolean(key && this.revealedPreviewKeys[key]);
+      },
+      revealPreview(item) {
+        const key = this.getPreviewKey(item);
+        if (!key || this.isPreviewRevealed(item)) return;
+        this.$set(this.revealedPreviewKeys, key, true);
+      },
+      isPreviewGated(item, explicitType = '') {
+        return !this.isPreviewRevealed(item) && !this.shouldAutoLoadPreview(item, explicitType);
+      },
+      shouldAutoLoadPreview(item, explicitType = '') {
+        if (!item) return false;
+        if (this.isNsfwContent(item)) return false;
         if (this.loadMode === 'noImage') return false;
-        if (this.loadMode === 'dataSaver') {
-          // 省流模式：跳过大于5MB的图片
-          const sizeLimit = 5 * 1024 * 1024;
-          return (item.metadata?.fileSize || 0) <= sizeLimit;
+
+        const type = explicitType || this.getActualFileType(item.name);
+        const size = Number(item.metadata?.fileSize || 0);
+
+        if (type === 'video' || type === 'audio') {
+          return false;
         }
-        return true;
+
+        if (type === 'image') {
+          const normalImageLimit = 12 * 1024 * 1024;
+          const dataSaverLimit = 5 * 1024 * 1024;
+          if (this.loadMode === 'dataSaver') return size > 0 && size <= dataSaverLimit;
+          return size <= 0 || size <= normalImageLimit;
+        }
+
+        return false;
+      },
+      getPreviewGateTitle(item, explicitType = '') {
+        if (this.isNsfwContent(item)) return '敏感预览已模糊';
+        const type = explicitType || this.getActualFileType(item.name);
+        const labels = {
+          image: '点击唤醒图片预览',
+          video: '点击唤醒视频预览',
+          audio: '点击唤醒音频预览',
+        };
+        return labels[type] || '预览已暂停';
+      },
+      getPreviewGateSubtitle(item, explicitType = '') {
+        const size = Number(item?.metadata?.fileSize || 0);
+        const sizeLabel = size > 0 ? ` · ${this.formatFileSize(size)}` : '';
+        const type = explicitType || this.getActualFileType(item?.name || '');
+        if (this.isNsfwContent(item)) return `点击解除模糊并加载粗预览${sizeLabel}`;
+        if (this.loadMode === 'noImage') return `无图模式，本次点击后加载${sizeLabel}`;
+        if (type === 'video') return `先不读取媒体资源，点击后只加载元数据${sizeLabel}`;
+        if (type === 'audio') return `先不读取音频资源，点击后加载播放器${sizeLabel}`;
+        return `点击后再读取文件资源${sizeLabel}`;
+      },
+      shouldShowImage(item) {
+        return this.shouldAutoLoadPreview(item, 'image') || this.isPreviewRevealed(item);
       },
       // 检查是否为NSFW内容
       isNsfwContent(item) {
